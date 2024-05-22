@@ -6,52 +6,10 @@ from logging import config
 import time
 import warnings
 from pipedrive_shipcloud_automation.credentials import PIPEDRIVE_API_KEY, SHIPCLOUD_API_KEY
-
-# SHIPCLOUD_API_KEY = 'efe475e2abb471674b7b6d43a5e02768'
-# PIPEDRIVE_API_KEY = '25e7e4a59aba35331a5b1daffbd4322287df20c2'
+from plombery import task, get_logger
 
 
-def configure_get_log():
-    warnings.filterwarnings("ignore")
-
-    config.dictConfig(
-        {
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {
-                "default": {
-                    "format": "[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s"
-                },
-                "slack_format": {
-                    "format": "`[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d]` %(message)s"
-                },
-            },
-            "handlers": {
-                "file": {
-                    "class": "logging.FileHandler",
-                    "formatter": "default",
-                    "filename": "logs.log",
-                },
-                "console": {
-                    "class": "logging.StreamHandler",
-                    "formatter": "default",
-                },
-            },
-            
-            "loggers": {
-                "root": {
-                    "level": logging.INFO,
-                    "handlers": ["file", "console"],
-                    "propagate": False,
-                },
-            },
-        }
-    )
-    log = logging.getLogger("root")
-    return log
-
-
-log = configure_get_log()
+log = get_logger()
 
 def retry(max_retry_count, interval_sec):
     def decorator(func):
@@ -295,7 +253,7 @@ def create_shipments():
     return True
 
 
-
+@task
 def run_pipeline():
     update_delivery_statuses()
     create_shipments()
