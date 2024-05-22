@@ -1,13 +1,19 @@
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
-from plombery import Trigger, register_pipeline, get_logger
+from plombery import Trigger, register_pipeline
 from pytz import timezone
-from pipedrive_shipcloud_automation import main
+from plombery import task, get_logger
+
+@task
+def pipedrive():
+    from pipedrive_shipcloud_automation import main
+    main.log = get_logger()
+    main.run_pipeline()
 
 register_pipeline(
-    id="dfd",
+    id="pipedrive_X_shipcloud",
     description="Pipedrive and shipcloud update pipeline",
-    tasks = [main.run_pipeline],
+    tasks = [pipedrive],
     triggers = [
         Trigger(
             id="pipedrive_8am",
