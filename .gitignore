@@ -1,3 +1,4 @@
 .data*
 *pycache*
 credentials*
+*.db
