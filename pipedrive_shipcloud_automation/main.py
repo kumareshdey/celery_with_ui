@@ -214,7 +214,7 @@ class Shipcloud:
         
     @staticmethod
     @retry(max_retry_count=3, interval_sec=20)
-    def create_shipment_request(company="", first_name="", last_name="", street="", street_no="", zip_code="", city="", country="DE"):
+    def create_shipment_request(pipedrive_id="", company="", first_name="", last_name="", street="", street_no="", zip_code="", city="", country="DE"):
         payload = {
             "to": {
                 'company': company,
@@ -235,6 +235,7 @@ class Shipcloud:
             },
             "carrier": "iloxx",
             "service": "standard",
+            "reference_number": pipedrive_id,
             "notification_email": "logistics@brandgarage.de",
             "create_shipping_label": True
         }
@@ -283,6 +284,7 @@ def create_shipments():
     for deal in deals:
         log.info(f"""Creating shipment for : {deal["title"]}""")
         tracking_details = Shipcloud.create_shipment_request(
+            pipedrive_id=deal['id'],
             company=deal[Pipedrive.CustomFields.company], 
             first_name=deal[Pipedrive.CustomFields.contact_person],
             street=deal[Pipedrive.CustomFields.street], 
