@@ -33,4 +33,4 @@ register_pipeline(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("plombery:get_app", reload=True, factory=True)
+    uvicorn.run("plombery:get_app", reload=True, factory=True, port=9876)
