@@ -262,22 +262,23 @@ def update_delivery_statuses():
     deals_out_for_delivery = Pipedrive.get_deals_by_stage_id(Pipedrive.Stages.out_for_delivery)
     deals_printed = Pipedrive.get_deals_by_stage_id(Pipedrive.Stages.printed)
     for deal in deals_out_for_delivery:
-        log.info(f"""Checking delivery status for : {deal["title"]}""")
-        shipment = Shipcloud.get_shipments(shipment_id=deal[Pipedrive.CustomFields.shipcloud_id])
-        for event in shipment['packages'][0]['tracking_events']:
-            if event['status'] == Shipcloud.Status.delivered:
-                update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.delivered)
-                break
+        if deal[Pipedrive.CustomFields.shipcloud_id]:
+            log.info(f"""Checking delivery status for : {deal["title"]}""")
+            shipment = Shipcloud.get_shipments(shipment_id=deal[Pipedrive.CustomFields.shipcloud_id])
+            for event in shipment['packages'][0]['tracking_events']:
+                if event['status'] == Shipcloud.Status.delivered:
+                    update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.delivered)
+                    break
     for deal in deals_printed:
-        log.info(f"""Checking delivery status for : {deal["title"]}""")
-        shipment = Shipcloud.get_shipments(shipment_id=deal[Pipedrive.CustomFields.shipcloud_id])
-        for event in shipment['packages'][0]['tracking_events']:
-            if event['status'] == Shipcloud.Status.delivered:
-                update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.delivered)
-                break
-            if event['status'] == Shipcloud.Status.out_for_delivery:
-                update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.out_for_delivery)
-    
+        if deal[Pipedrive.CustomFields.shipcloud_id]:
+            log.info(f"""Checking delivery status for : {deal["title"]}""")
+            shipment = Shipcloud.get_shipments(shipment_id=deal[Pipedrive.CustomFields.shipcloud_id])
+            for event in shipment['packages'][0]['tracking_events']:
+                if event['status'] == Shipcloud.Status.delivered:
+                    update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.delivered)
+                    break
+                if event['status'] == Shipcloud.Status.out_for_delivery:
+                    update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.out_for_delivery)
     return True
 
 
