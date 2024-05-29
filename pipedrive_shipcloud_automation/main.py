@@ -5,7 +5,11 @@ import logging
 from logging import config
 import time
 import warnings
-from .credentials import PIPEDRIVE_API_KEY, SHIPCLOUD_API_KEY
+from .credentials import PIPEDRIVE_API_KEY, SHIPCLOUD_API_KEY, EMAIL_PASS, EMAIL
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 
 def configure_get_log():
@@ -281,9 +285,65 @@ def update_delivery_statuses():
                     update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.out_for_delivery)
     return True
 
+def create_email_body(links):
+    """
+    Create the email body with the given list of links.
+    
+    Args:
+    - links (list of str): List of URLs to include in the email.
+    
+    Returns:
+    - str: The email body in German with the provided links.
+    """
+    links_str = "\n".join([f"{i+1}. {link}" for i, link in enumerate(links)])
+    body = f"""
+    Hallo,
+
+    Dies sind die Links zum Herunterladen der Versandetiketten:
+
+    {links_str}
+
+    Mit freundlichen Grüßen,
+    Kumaresh Dey
+    """
+    return body
+
+@retry(max_retry_count= 3, interval_sec=3)
+def send_email(links):
+    """
+    Send an email with the provided links in the message body.
+    
+    Args:
+    - links (list of str): List of URLs to include in the email.
+    """
+
+    smtp_server = 'smtp.gmail.com'
+    port = 465  # SSL port
+    current_date = datetime.now().strftime('%d.%m.%Y')
+    subject = f'Ihre Versandetiketten für {current_date}'
+    body = create_email_body(links)
+    message = MIMEMultipart()
+    message['From'] = EMAIL
+    message['To'] = 'hozogot@gmail.com'#'logistics@brandgarage.de'
+    message['Subject'] = subject
+    message.attach(MIMEText(body, 'plain'))
+    try:
+        server = smtplib.SMTP_SSL(smtp_server, port)
+        server.login(EMAIL, EMAIL_PASS)
+        server.sendmail(EMAIL, message['To'] , message.as_string())
+        log.info('Email sent successfully')
+    except smtplib.SMTPAuthenticationError as auth_error:
+        log.error(f'SMTP Authentication Error: {auth_error}')
+        raise smtplib.SMTPAuthenticationError()
+    except Exception as e:
+        log.error(f'Error: {e}')
+        raise Exception()
+    finally:
+        server.quit()
 
 
 def create_shipments():
+    links = []
     deals = Pipedrive.get_deals_by_stage_id(Pipedrive.Stages.ready_for_shipping)
     for deal in deals:
         log.info(f"""Creating shipment for : {deal["title"]}""")
@@ -303,10 +363,11 @@ def create_shipments():
         if tracking_details:
             tracking_id = tracking_details['carrier_tracking_no']
             shipcloud_id = tracking_details['id']
+            links.append(tracking_details['label_url'])
             update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.printed, tracking_id=tracking_id, shipcloud_id=shipcloud_id)
         else:
             log.error(f"""Creating shipment failed for: {deal["title"]}""")
-    return True
+    return links
 
 
 def run_pipeline():
@@ -315,4 +376,5 @@ def run_pipeline():
     log.info(f'update_delivery_statuses completed. result = {result}')
     log.info("Running: create_shipments")
     result = create_shipments()
-    log.info(f'create_shipments completed. result = {result}')
+    log.info(f'create_shipments completed. result = True')
+    send_email(result)
