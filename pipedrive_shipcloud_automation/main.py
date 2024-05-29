@@ -324,7 +324,7 @@ def send_email(links):
     body = create_email_body(links)
     message = MIMEMultipart()
     message['From'] = EMAIL
-    message['To'] = 'hozogot@gmail.com'#'logistics@brandgarage.de'
+    message['To'] = 'logistics@brandgarage.de'
     message['Subject'] = subject
     message.attach(MIMEText(body, 'plain'))
     try:
