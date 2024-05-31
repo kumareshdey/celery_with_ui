@@ -271,6 +271,7 @@ def update_delivery_statuses():
             shipment = Shipcloud.get_shipments(shipment_id=deal[Pipedrive.CustomFields.shipcloud_id])
             for event in shipment['packages'][0]['tracking_events']:
                 if event['status'] == Shipcloud.Status.delivered:
+                    log.info(f"Delivery status changed to {Shipcloud.Status.delivered}")
                     update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.delivered)
                     break
     for deal in deals_printed:
@@ -279,9 +280,11 @@ def update_delivery_statuses():
             shipment = Shipcloud.get_shipments(shipment_id=deal[Pipedrive.CustomFields.shipcloud_id])
             for event in shipment['packages'][0]['tracking_events']:
                 if event['status'] == Shipcloud.Status.delivered:
+                    log.info(f"Delivery status changed to {Shipcloud.Status.delivered}")
                     update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.delivered)
                     break
                 if event['status'] == Shipcloud.Status.out_for_delivery:
+                    log.info(f"Delivery status changed to {Shipcloud.Status.out_for_delivery}")
                     update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.out_for_delivery)
     return True
 
