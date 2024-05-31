@@ -377,4 +377,5 @@ def run_pipeline():
     log.info("Running: create_shipments")
     result = create_shipments()
     log.info(f'create_shipments completed. result = True')
-    send_email(result)
+    if result:
+        send_email(result)
