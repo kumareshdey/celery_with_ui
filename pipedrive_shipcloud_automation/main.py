@@ -315,6 +315,8 @@ class Emailer:
 
         Bitte finden Sie das Etiketten-PDF im Anhang.
 
+        {self.pdf_urls}
+
         Vielen Dank.
         Kumaresh Dey,
         Softwarehouse
