@@ -7,10 +7,15 @@ import time
 import warnings
 from .credentials import PIPEDRIVE_API_KEY, SHIPCLOUD_API_KEY, EMAIL_PASS, EMAIL
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-
+from io import BytesIO
+import requests
+import fitz  # PyMuPDF
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+import smtplib
+from PIL import Image
 
 def configure_get_log():
     warnings.filterwarnings("ignore")
@@ -262,6 +267,100 @@ class Shipcloud:
                     return ship
             return []
         
+class Emailer:
+    def __init__(self, pdf_urls, to_email='logistics@brandgarage.de'):
+        self.pdf_urls = pdf_urls
+        self.to_email = to_email
+
+    def pdf_url_to_image(self, url, resolution=300):
+        response = requests.get(url)
+        response.raise_for_status()
+        pdf_bytes = response.content
+        doc = fitz.open("pdf", pdf_bytes)
+        page = doc.load_page(0)
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # Increase resolution by scaling the pixmap
+        img = Image.open(BytesIO(pix.tobytes()))
+        return img
+
+    def create_collage(self):
+        images = [self.pdf_url_to_image(url, resolution=300) for url in self.pdf_urls]
+
+        # Determine the number of collages needed
+        num_collages = (len(images) + 3) // 4
+
+        collages = []
+        for i in range(num_collages):
+            collage_images = images[i*4 : (i+1)*4]
+            image_width, image_height = collage_images[0].size
+            collage_width = 2 * image_width
+            collage_height = 2 * image_height
+            collage = Image.new('RGB', (collage_width, collage_height), 'white')
+            for j, img in enumerate(collage_images):
+                x = j % 2 * image_width
+                y = j // 2 * image_height
+                collage.paste(img, (x, y))
+
+            collages.append(collage)
+
+        return collages
+
+    def send_email(self):
+
+        smtp_server = 'smtp.gmail.com'
+        port = 465  # SSL port
+        current_date = datetime.now().strftime('%d.%m.%Y')
+        subject = f'Ihre Versandetiketten für {current_date}'
+        body = f"""
+        Hallo,
+
+        Bitte finden Sie das Etiketten-PDF im Anhang.
+
+        Vielen Dank.
+        Kumaresh Dey,
+        Softwarehouse
+        softwarehouse@myyahoo.com
+        """
+        message = MIMEMultipart()
+        message['From'] = EMAIL
+        message['To'] = self.to_email
+        message['Subject'] = subject
+        message.attach(MIMEText(body, 'plain'))
+
+        # Create collages from the PDF pages
+        collages = self.create_collage()
+
+        # Save the collages into a single PDF file
+        output_pdf_bytes = BytesIO()
+        with fitz.open() as doc:
+            for collage in collages:
+                img_bytes = BytesIO()
+                collage.save(img_bytes, format='PDF')
+                img_bytes.seek(0)
+                img_doc = fitz.open("pdf", img_bytes.getvalue())
+                doc.insert_pdf(img_doc)
+
+            doc.save(output_pdf_bytes)
+
+        # Attach the PDF to the email
+        attachment = MIMEApplication(output_pdf_bytes.getvalue())
+        attachment.add_header('Content-Disposition', 'attachment', filename=f'versandetiketten_{current_date}.pdf')
+        message.attach(attachment)
+
+        try:
+            server = smtplib.SMTP_SSL(smtp_server, port)
+            server.login(EMAIL, EMAIL_PASS)
+            server.sendmail(EMAIL, message['To'] , message.as_string())
+            log.info('Email sent successfully')
+        except smtplib.SMTPAuthenticationError as auth_error:
+            log.error(f'SMTP Authentication Error: {auth_error}')
+            raise smtplib.SMTPAuthenticationError()
+        except Exception as e:
+            log.error(f'Error: {e}')
+            raise Exception()
+        finally:
+            server.quit()
+
+
 def update_delivery_statuses():
     deals_out_for_delivery = Pipedrive.get_deals_by_stage_id(Pipedrive.Stages.out_for_delivery)
     deals_printed = Pipedrive.get_deals_by_stage_id(Pipedrive.Stages.printed)
@@ -271,7 +370,6 @@ def update_delivery_statuses():
             shipment = Shipcloud.get_shipments(shipment_id=deal[Pipedrive.CustomFields.shipcloud_id])
             for event in shipment['packages'][0]['tracking_events']:
                 if event['status'] == Shipcloud.Status.delivered:
-                    log.info(f"Delivery status changed to {Shipcloud.Status.delivered}")
                     update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.delivered)
                     break
     for deal in deals_printed:
@@ -280,69 +378,11 @@ def update_delivery_statuses():
             shipment = Shipcloud.get_shipments(shipment_id=deal[Pipedrive.CustomFields.shipcloud_id])
             for event in shipment['packages'][0]['tracking_events']:
                 if event['status'] == Shipcloud.Status.delivered:
-                    log.info(f"Delivery status changed to {Shipcloud.Status.delivered}")
                     update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.delivered)
                     break
                 if event['status'] == Shipcloud.Status.out_for_delivery:
-                    log.info(f"Delivery status changed to {Shipcloud.Status.out_for_delivery}")
                     update_deal = Pipedrive.update_deal(deal_id=deal['id'], stage_id=Pipedrive.Stages.out_for_delivery)
     return True
-
-def create_email_body(links):
-    """
-    Create the email body with the given list of links.
-    
-    Args:
-    - links (list of str): List of URLs to include in the email.
-    
-    Returns:
-    - str: The email body in German with the provided links.
-    """
-    links_str = "\n".join([f"{i+1}. {link}" for i, link in enumerate(links)])
-    body = f"""
-    Hallo,
-
-    Dies sind die Links zum Herunterladen der Versandetiketten:
-
-    {links_str}
-
-    Mit freundlichen Grüßen,
-    Kumaresh Dey
-    """
-    return body
-
-@retry(max_retry_count= 3, interval_sec=3)
-def send_email(links):
-    """
-    Send an email with the provided links in the message body.
-    
-    Args:
-    - links (list of str): List of URLs to include in the email.
-    """
-
-    smtp_server = 'smtp.gmail.com'
-    port = 465  # SSL port
-    current_date = datetime.now().strftime('%d.%m.%Y')
-    subject = f'Ihre Versandetiketten für {current_date}'
-    body = create_email_body(links)
-    message = MIMEMultipart()
-    message['From'] = EMAIL
-    message['To'] = 'logistics@brandgarage.de'
-    message['Subject'] = subject
-    message.attach(MIMEText(body, 'plain'))
-    try:
-        server = smtplib.SMTP_SSL(smtp_server, port)
-        server.login(EMAIL, EMAIL_PASS)
-        server.sendmail(EMAIL, message['To'] , message.as_string())
-        log.info('Email sent successfully')
-    except smtplib.SMTPAuthenticationError as auth_error:
-        log.error(f'SMTP Authentication Error: {auth_error}')
-        raise smtplib.SMTPAuthenticationError()
-    except Exception as e:
-        log.error(f'Error: {e}')
-        raise Exception()
-    finally:
-        server.quit()
 
 
 def create_shipments():
@@ -380,5 +420,4 @@ def run_pipeline():
     log.info("Running: create_shipments")
     result = create_shipments()
     log.info(f'create_shipments completed. result = True')
-    if result:
-        send_email(result)
+    Emailer(result).send_email()
