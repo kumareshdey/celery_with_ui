@@ -420,4 +420,6 @@ def run_pipeline():
     log.info("Running: create_shipments")
     result = create_shipments()
     log.info(f'create_shipments completed. result = True')
-    Emailer(result).send_email()
+    if result:
+        Emailer(result).send_email()
+    
